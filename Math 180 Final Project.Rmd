@@ -1,0 +1,328 @@
+---
+title: "Math 180 Final Project"
+author: "Kylie Freitas, Yeimi Aguayo, Yurui Huang, Kaixuan Zhang"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+students = read.csv('StudentsPerformance.csv',stringsAsFactors = T)
+str(students)
+```
+
+```{r}
+new = students
+library(tree)
+colnames(new)[6:8] = c('math','reading','writing')
+
+set.seed(1)
+# Create training indices
+train = sample(nrow(new), nrow(new)/2)
+# Create test set 
+students_test = new[-train,]
+
+# Create test label
+math.test = new$math[-train]
+
+writing.test = new$writing[-train]
+
+reading.test = new$reading[-train]
+```
+
+```{r}
+# To get an idea of the score distribution for each subject, we are making histograms
+par(mfrow = c(1,3))
+hm = hist(new$math, ylab = "Number of Students", xlab = "Math Exam Scores", main = "Math Exam Score Distribution", col = 'pink')
+text(hm$mids,hm$counts,labels = hm$counts, adj = c(0.5,-0.5))
+
+hw = hist(new$writing, ylab = "Number of Students", xlab = "Writing Exam Scores", main = "Writing Exam Score Distribution", col = 'magenta')
+text(hw$mids,hw$counts,labels = hw$counts, adj = c(0.5,-0.5))
+
+hr = hist(new$reading, ylab = "Number of Students", xlab = "Reading Exam Scores", main = "Reading Exam Score Distribution", col = 'purple')
+text(hr$mids,hr$counts,labels = hr$counts, adj = c(0.5,-0.5))
+
+# finding out which % of students passed (70 or higher)
+math_pass = sum(new$math >= 70) / 1000
+math_fail = sum(new$math < 70) / 1000
+math_pass
+math_fail
+
+writing_pass = sum(new$writing >= 70) / 1000
+writing_fail = sum(new$writing < 70) / 1000
+writing_pass
+writing_fail
+
+reading_pass = sum(new$reading >= 70) / 1000
+reading_fail = sum(new$reading < 70) / 1000
+reading_pass
+reading_fail
+```
+
+```{r}
+set.seed(1)
+
+# Fit a decision tree on the training set 
+# - the two other responses
+tree.fit = tree(math ~., new[,-c(7,8)], subset = train)
+# Predict based on test set 
+tree.pred = predict(tree.fit, students_test)
+# Compute mean absolute error
+mae.tree = mean(abs(tree.pred - as.numeric(math.test)))  #11.41376
+
+# 10-fold cross validation on tree
+cv.new = cv.tree(tree.fit,FUN = prune.tree,K=10)
+plot(cv.new$size,cv.new$dev, type='b', xlab = "Number of branches", ylab = "Number of Misclassifications", main = "Optimal Tree Size Using \n 10 fold Cross-Validation \n")
+
+# Choose the optimal tree size with smallest error
+best_k = cv.new$size[which.min(cv.new$dev)]
+best_k   #4
+
+# Prune training tree with the optimal tree size 
+prune.students = prune.tree(tree.fit,best = best_k)
+
+# Plot the pruned tree
+plot(prune.students)
+text(prune.students,pretty = 0)
+
+# Make predictions 
+tree.pred = predict(prune.students,students_test)
+
+# Compute mean absolute error
+mae.test = mean(abs(tree.pred - math.test)) 
+mae.test   #11.33082
+
+# inconclusive, mean abs error is smaller with linear regression -> didn't bother with other responses
+```
+
+
+```{r}
+# Fitting linear regression
+new1 = students
+colnames(new1)[6:8] = c('math','reading','writing')
+
+# Create test set
+students_test = new1[-train,]
+
+# When you unclass a predictor/variable, it converts the variable into numerical values.
+
+# We have to do this for the dataset (training, test, or the whole set).
+for (i in 1:5){
+  new1[,i] = unclass(new1[,i]) 
+  students_test[,i] = unclass(students_test[,i]) 
+}
+```
+
+```{r}
+# testing each predictor based on our results from best and forward subset selection
+
+# MATH SCORES USING 1,2,3,4,5 PREDICTORS
+
+# Math scores - 1 predictor 
+# using lunch based on best&forward subset selection 
+lm.fit_math1 = lm(math ~., new1[,-c(1:3,5,7:8)],subset = train)
+lm.pred_math1 = predict(lm.fit_math1, students_test)
+summary(lm.fit_math1)
+# mean absolute error math - 1 predictor
+lm.mae_math1 = mean(abs(lm.pred_math1 - math.test))
+lm.mae_math1  #11.38013
+
+# Math scores - 2 predictors
+# using race/ethnicity & lunch
+lm.fit_math2 = lm(math ~., new1[,-c(1,3,5,7:8)],subset = train)
+lm.pred_math2 = predict(lm.fit_math2, students_test)
+summary(lm.fit_math2)
+# mean absolute error math - 2 predictors
+lm.mae_math2 = mean(abs(lm.pred_math2 - math.test))
+lm.mae_math2  #11.24313
+
+# Math scores - 3 predictors
+# using race/ethnicity, lunch, & test prep
+lm.fit_math3 = lm(math ~., new1[,-c(1,3,7:8)],subset = train)
+lm.pred_math3= predict(lm.fit_math3, students_test)
+summary(lm.fit_math3)
+# mean absolute error math - 3 predictors
+lm.mae_math3 = mean(abs(lm.pred_math3 - math.test))
+lm.mae_math3  #11.14808
+
+# Math scores - 4 predictors 
+# using gender, race/ethnicity, lunch, & test prep
+lm.fit_math4 = lm(math ~., new1[,-c(3,7:8)],subset = train)
+lm.pred_math4 = predict(lm.fit_math4, students_test)
+summary(lm.fit_math4)
+# mean absolute error math - 4 predictors
+lm.mae_math4 = mean(abs(lm.pred_math4 - math.test))
+lm.mae_math4  #10.92729  *SMALLEST MEAN ABS ERROR
+
+# Math scores - all predictors (excluding other responses)
+lm.fit_math = lm(math ~., new1[,1:6],subset = train)
+lm.pred_math = predict(lm.fit_math, students_test)
+summary(lm.fit_math)
+# mean absolute error math - all predictors
+lm.mae_math = mean(abs(lm.pred_math - math.test))
+lm.mae_math  #10.97849
+```
+
+```{r}
+# WRITING SCORES USING 1,2,3,4,5 PREDICTORS
+
+# Writing scores - 1 predictor
+# using test prep courses based on best&forward subset selection
+lm.fit_wri1 = lm(writing ~., new1[,-c(1:4,6:7)],subset = train)
+lm.pred_wri1 = predict(lm.fit_wri1, students_test)
+summary(lm.fit_wri1)
+# mean abs error writing - 1 predictor 
+lm.mae_wri1 = mean(abs(lm.pred_wri1 - writing.test))
+lm.mae_wri1  #11.97853
+
+# Writing scores - 2 predictors 
+# using gender & test prep
+lm.fit_wri2 = lm(writing ~., new1[,-c(2:4,6:7)],subset = train)
+lm.pred_wri2 = predict(lm.fit_wri2, students_test)
+summary(lm.fit_wri2)
+# mean abs error writing - 2 predictors 
+lm.mae_wri2 = mean(abs(lm.pred_wri2 - writing.test))
+lm.mae_wri2  #11.25691
+
+# Writing scores - 3 predictors
+# using gender, lunch, & test prep
+lm.fit_wri3 = lm(writing ~., new1[,-c(2:3,6:7)],subset = train)
+lm.pred_wri3 = predict(lm.fit_wri3, students_test)
+summary(lm.fit_wri3)
+# mean abs error writing - 3 predictors 
+lm.mae_wri3 = mean(abs(lm.pred_wri3 - writing.test))
+lm.mae_wri3  #10.8614
+
+# Writing scores - 4 predictors 
+# using gender,race/ethnicity,lunch, & test prep
+lm.fit_wri4 = lm(writing ~., new1[,-c(3,6,7)],subset = train)
+lm.pred_wri4 = predict(lm.fit_wri4, students_test)
+summary(lm.fit_wri4)
+# mean abs error writing - 4 predictors 
+lm.mae_wri4 = mean(abs(lm.pred_wri4 - writing.test))
+lm.mae_wri4  #10.73783  *SMALLEST MEAN ABS ERROR
+
+# Writing scores - all predictors
+lm.fit_wri = lm(writing ~., new1[,-c(6,7)],subset = train)
+lm.pred_wri = predict(lm.fit_wri, students_test)
+summary(lm.fit_wri)
+# mean abs error writing - all predictors 
+lm.mae_wri = mean(abs(lm.pred_wri - writing.test))
+lm.mae_wri  #10.81375
+```
+
+```{r}
+# READING SCORES USING 1,2,3,4,5 PREDICTORS
+
+# Reading scores - 1 predictor
+# using gender
+lm.fit_read1 = lm(reading ~., new1[,-c(2:5,6,8)],subset = train)
+lm.pred_read1 = predict(lm.fit_read1, students_test)
+summary(lm.fit_read1)
+# mean abs error reading - 1 predictor 
+lm.mae_read1 = mean(abs(lm.pred_read1 - reading.test))
+lm.mae_read1  #11.54421
+
+# Reading scores - 2 predictors 
+# using gender & test prep
+lm.fit_read2 = lm(reading ~., new1[,-c(2:4,6,8)],subset = train)
+lm.pred_read2 = predict(lm.fit_read2, students_test)
+summary(lm.fit_read2)
+# mean abs error reading - 2 predictors 
+lm.mae_read2 = mean(abs(lm.pred_read2 - reading.test))
+lm.mae_read2  #11.23398
+
+# Reading scores - 3 predictors 
+# using gender, lunch, & test prep
+lm.fit_read3 = lm(reading ~., new1[,-c(2:3,6,8)],subset = train)
+lm.pred_read3 = predict(lm.fit_read3, students_test)
+summary(lm.fit_read3)
+# mean abs error reading - 3 predictors 
+lm.mae_read3 = mean(abs(lm.pred_read3 - reading.test))
+lm.mae_read3  #10.87747
+
+# Reading scores - 4 predictors 
+# using gender,race/ethnicity,lunch, & test prep
+lm.fit_read4 = lm(reading ~., new1[,-c(3,6,8)],subset = train)
+lm.pred_read4 = predict(lm.fit_read4, students_test)
+summary(lm.fit_read4)
+# mean abs error reading - 4 predictors 
+lm.mae_read4 = mean(abs(lm.pred_read4 - reading.test))
+lm.mae_read4  #10.84505  *SMALLEST MEAN ABS ERROR
+
+# Reading scores - all predictors, took out writing and math 
+lm.fit_read = lm(reading ~., new1[,-c(6,8)],subset = train)
+lm.pred_read = predict(lm.fit_read, students_test)
+summary(lm.fit_read)
+# mean abs error reading - all predictors 
+lm.mae_read = mean(abs(lm.pred_read - reading.test))
+lm.mae_read  #10.84594
+```
+
+```{r}
+library(leaps)
+
+# BEST SUBSET SELECTION
+
+# Math score w/ RSS
+regfit.full_math = regsubsets(math ~., data = new1[,1:6])
+summary(regfit.full_math)
+
+par(mfrow = c(1,3))
+plot(regfit.full_math$rss, xlab = "Number of Variables", ylab = "RSS", main = "RSS for Math Scores \n by best subset selection \n")
+abline(v = which.min(regfit.full_math$rss), col = "pink")
+
+# Writing score w/ RSS
+regfit.full_wri = regsubsets(writing ~., data = new1[,-c(6,7)])
+summary(regfit.full_wri)
+
+plot(regfit.full_wri$rss, xlab = "Number of Variables", ylab = "RSS", main = "RSS for Writing Scores \n by best subset selection \n")
+abline(v = which.min(regfit.full_wri$rss), col = "magenta")
+
+# Reading score w/ RSS
+regfit.full_read = regsubsets(reading ~., data = new1[,-c(6,8)])
+summary(regfit.full_read)
+
+plot(regfit.full_read$rss, xlab = "Number of Variables", ylab = "RSS", main = "RSS for Reading Scores \n by best subset selection \n")
+abline(v = which.min(regfit.full_read$rss), col = "purple")
+```
+
+```{r}
+# FORWARD SUBSET SELECTION
+
+# Math score w/ RSS
+regfit.full_math = regsubsets(math ~., data = new1[,1:6], method = "forward")
+summary(regfit.full_math)
+
+par(mfrow = c(1,3))
+plot(regfit.full_math$rss, xlab = "Number of Variables", ylab = "RSS", main = "RSS for Math Scores \n by forward subset selection \n")
+abline(v = which.min(regfit.full_math$rss), col = "pink")
+
+# Writing score w/ RSS
+regfit.full_wri = regsubsets(writing ~., data = new1[,-c(6,7)], method = "forward")
+summary(regfit.full_wri)
+
+plot(regfit.full_wri$rss, xlab = "Number of Variables", ylab = "RSS", main = "RSS for Writing Scores \n by forward subset selection \n")
+abline(v = which.min(regfit.full_wri$rss), col = "magenta")
+
+# Reading score w/ RSS
+regfit.full_read = regsubsets(reading ~., data = new1[,-c(6,8)], method = "forward")
+summary(regfit.full_read)
+
+plot(regfit.full_read$rss, xlab = "Number of Variables", ylab = "RSS", main = "RSS for Reading Scores \n by forward subset selection \n")
+abline(v = which.min(regfit.full_read$rss), col = "purple")
+
+# best subset selection and forward subset selection give us the same results, lowest RSS for all predictors 
+```
+
+
+```{r}
+# to see what % of each predictor category failed 
+math = new[new$math < 70,]
+
+# stats for failing rate based on predictors
+table(math$lunch)/nrow(math)
+```
+
