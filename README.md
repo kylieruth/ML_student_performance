@@ -1,2 +1,3 @@
 # ML_student_performance
-2022. Machine learning project to predict student performance based off of extracted data
+2022
+This project uses supervised machine learning techniques in R to predict student exam scores based on demographic and socioeconomic indicators such as reduced lunch status, prior grades, gender, race, and geographic location. I applied decision trees, linear regression, and subset selection methods to identify key predictors and evaluate model performance. Cross-validation and pruning were used to reduce overfitting and improve accuracy. The project highlights the impact of educational inequalities and demonstrates my ability to apply statistical modeling tools to real-world data.
